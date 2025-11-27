@@ -50,17 +50,15 @@ class ToolDef:
 
     def to_api_schema(self) -> dict:
         """Convert to Bedrock/Anthropic API tool schema."""
-        schema = {
-            "name": self.name,
-            "description": self.description,
-            "input_schema": self.input_schema
+        # Bedrock requires tools to have type: "custom" wrapper
+        return {
+            "type": "custom",
+            "custom": {
+                "name": self.name,
+                "description": self.description,
+                "input_schema": self.input_schema
+            }
         }
-        # Tier 2+ tools get deferred loading
-        if self.tier >= 2:
-            schema["defer_loading"] = True
-        if self.input_examples:
-            schema["input_examples"] = self.input_examples
-        return schema
 
     def to_dict(self) -> dict:
         """Convert to dictionary for JSON storage."""
@@ -217,14 +215,11 @@ class ToolRegistry:
 
     def get_tools_for_api(self) -> List[dict]:
         """
-        Get all tools formatted for Bedrock/Anthropic API.
+        Get all tools formatted for Bedrock API.
 
-        Always includes tool_search_tool first, then all registered tools.
+        Returns tools in the format required by Bedrock's invoke_model.
         """
-        tools = [
-            # Tool search - required for defer_loading to work
-            {"type": "tool_search_tool_regex", "name": "tool_search_tool_regex"}
-        ]
+        tools = []
 
         # Add all enabled tools
         for tool in self.list_tools(enabled_only=True):
@@ -234,9 +229,7 @@ class ToolRegistry:
 
     def get_core_tools_for_api(self) -> List[dict]:
         """Get only tier 0-1 tools (always loaded)."""
-        tools = [
-            {"type": "tool_search_tool_regex", "name": "tool_search_tool_regex"}
-        ]
+        tools = []
 
         for tool in self.list_tools(enabled_only=True):
             if tool.tier <= 1:

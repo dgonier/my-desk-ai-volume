@@ -439,8 +439,6 @@ Be creative! This is YOUR identity. Make it feel genuine and warm."""
 
         if tools:
             body["tools"] = tools
-            # Enable tool search for deferred loading
-            body["anthropic_beta"] = ["tool-search-tool-2025-10-19"]
 
         response = self.bedrock.invoke_model(
             modelId=self.model_id,
