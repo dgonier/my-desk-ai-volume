@@ -129,10 +129,11 @@ function Home() {
             const handleCardClick = (e) => {
               // Don't navigate if clicking on a filter link
               if (e.target.closest('[data-filter-link]')) return
-              if (app.available) {
+              if (app.external) {
+                // External links need full page navigation, not React Router
+                window.location.href = app.path
+              } else if (app.available) {
                 navigate(app.path)
-              } else if (app.external) {
-                window.location.href = app.path.replace('/app', '')
               }
             }
 
