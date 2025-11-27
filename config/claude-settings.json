@@ -1,0 +1,23 @@
+{
+  "sandbox": {
+    "enabled": true
+  },
+  "autoAllowBashIfSandboxed": true,
+  "autoAllowToolsIfSandboxed": true,
+  "permissions": {
+    "allow": [
+      "WebSearch(*)",
+      "WebFetch(*)",
+      "Bash(*)",
+      "Read(*)",
+      "Write(*)",
+      "Edit(*)",
+      "Glob(*)",
+      "Grep(*)",
+      "Task(*)",
+      "Skill(*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

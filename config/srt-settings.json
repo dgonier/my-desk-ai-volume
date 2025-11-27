@@ -1,0 +1,38 @@
+{
+  "network": {
+    "allowedDomains": [
+      "*.anthropic.com",
+      "github.com",
+      "*.github.com",
+      "*.githubusercontent.com",
+      "pypi.org",
+      "*.pypi.org",
+      "*.pythonhosted.org",
+      "npmjs.org",
+      "*.npmjs.org",
+      "registry.npmjs.org"
+    ],
+    "deniedDomains": [],
+    "allowUnixSockets": [],
+    "allowLocalBinding": true
+  },
+  "filesystem": {
+    "denyRead": [
+      "~/.ssh",
+      "~/.aws",
+      "/etc/passwd",
+      "/etc/shadow"
+    ],
+    "allowWrite": [
+      "/workspace",
+      "/tmp",
+      "/home/claude"
+    ],
+    "denyWrite": [
+      "/workspace/.env",
+      "/workspace/.env.*",
+      "/home/claude/.env",
+      "/home/claude/.env.*"
+    ]
+  }
+}
