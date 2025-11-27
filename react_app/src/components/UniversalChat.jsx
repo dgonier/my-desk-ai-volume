@@ -275,41 +275,39 @@ export default function UniversalChat({ defaultOpen = false }) {
 
   return (
     <>
-      {/* Floating Action Button */}
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className={`fixed bottom-6 right-6 w-16 h-16 rounded-full shadow-2xl flex items-center justify-center transition-all duration-300 border-4 border-white dark:border-gray-900 ${
-          isOpen
-            ? 'bg-gray-700 hover:bg-gray-800 z-[60]'
-            : 'bg-gradient-to-br from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 hover:scale-110 z-[60]'
-        }`}
-        style={{ boxShadow: '0 8px 32px rgba(139, 92, 246, 0.4)' }}
-        title={isOpen ? 'Close chat' : 'Chat with Mira'}
-      >
-        {isOpen ? (
-          <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        ) : (
+      {/* Floating Action Button - Hidden when drawer is open */}
+      {!isOpen && (
+        <button
+          onClick={() => setIsOpen(true)}
+          className="fixed bottom-6 right-6 w-16 h-16 rounded-full shadow-2xl flex items-center justify-center transition-all duration-300 border-4 border-white dark:border-gray-900 bg-gradient-to-br from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 hover:scale-110 z-[60]"
+          style={{ boxShadow: '0 8px 32px rgba(139, 92, 246, 0.4)' }}
+          title="Chat with Mira"
+        >
           <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
           </svg>
-        )}
-      </button>
+        </button>
+      )}
 
-      {/* Chat Panel */}
+      {/* Backdrop overlay */}
+      {isOpen && (
+        <div
+          className="fixed inset-0 bg-black/20 z-[54] transition-opacity duration-300"
+          onClick={() => setIsOpen(false)}
+        />
+      )}
+
+      {/* Chat Drawer - Full height side panel */}
       <div
-        className={`fixed bottom-28 right-6 w-96 max-w-[calc(100vw-3rem)] max-h-[70vh] bg-white dark:bg-gray-800 rounded-2xl shadow-2xl flex flex-col overflow-hidden transition-all duration-300 z-[55] border border-gray-200 dark:border-gray-700 ${
-          isOpen
-            ? 'opacity-100 translate-y-0 scale-100'
-            : 'opacity-0 translate-y-4 scale-95 pointer-events-none'
+        className={`fixed top-0 right-0 h-full w-96 max-w-[calc(100vw-2rem)] bg-white dark:bg-gray-800 shadow-2xl flex flex-col overflow-hidden transition-transform duration-300 ease-in-out z-[55] border-l border-gray-200 dark:border-gray-700 ${
+          isOpen ? 'translate-x-0' : 'translate-x-full'
         }`}
       >
         {/* Header */}
-        <div className="px-4 py-3 bg-purple-500 text-white">
+        <div className="px-4 py-4 bg-purple-500 text-white flex-shrink-0">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="font-semibold">{personaName || 'Assistant'}</h3>
+              <h3 className="font-semibold text-lg">{personaName || 'Assistant'}</h3>
               <div className="text-xs text-purple-200 flex items-center gap-1">
                 <span className="w-2 h-2 bg-green-400 rounded-full"></span>
                 {pageContext.name}
@@ -317,24 +315,25 @@ export default function UniversalChat({ defaultOpen = false }) {
             </div>
             <button
               onClick={() => setIsOpen(false)}
-              className="p-1 hover:bg-purple-600 rounded-lg transition-colors"
+              className="p-2 hover:bg-purple-600 rounded-lg transition-colors"
+              title="Close chat"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
           </div>
         </div>
 
         {/* Context Banner */}
-        <div className="px-3 py-2 bg-purple-50 dark:bg-purple-900/20 border-b border-purple-100 dark:border-purple-800">
+        <div className="px-3 py-2 bg-purple-50 dark:bg-purple-900/20 border-b border-purple-100 dark:border-purple-800 flex-shrink-0">
           <div className="text-xs text-purple-600 dark:text-purple-400">
             <span className="font-medium">Context:</span> {pageContext.description}
           </div>
         </div>
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-1 min-h-[200px] max-h-[400px]">
+        <div className="flex-1 overflow-y-auto p-4 space-y-1">
           {messages.length === 0 ? (
             <div className="text-center text-gray-400 dark:text-gray-500 py-8">
               <svg className="w-12 h-12 mx-auto mb-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -365,7 +364,7 @@ export default function UniversalChat({ defaultOpen = false }) {
         </div>
 
         {/* Input */}
-        <div className="p-3 border-t border-gray-200 dark:border-gray-700">
+        <div className="p-4 border-t border-gray-200 dark:border-gray-700 flex-shrink-0 bg-white dark:bg-gray-800">
           <div className="flex gap-2">
             <input
               ref={inputRef}
@@ -375,12 +374,12 @@ export default function UniversalChat({ defaultOpen = false }) {
               onKeyDown={handleKeyDown}
               placeholder="Ask me anything..."
               disabled={isLoading}
-              className="flex-1 px-4 py-2.5 bg-gray-100 dark:bg-gray-700 border-0 rounded-xl text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-purple-500 focus:outline-none disabled:opacity-50"
+              className="flex-1 px-4 py-3 bg-gray-100 dark:bg-gray-700 border-0 rounded-xl text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-purple-500 focus:outline-none disabled:opacity-50"
             />
             <button
               onClick={sendMessage}
               disabled={isLoading || !input.trim()}
-              className="px-4 py-2.5 bg-purple-500 text-white rounded-xl hover:bg-purple-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="px-4 py-3 bg-purple-500 text-white rounded-xl hover:bg-purple-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
