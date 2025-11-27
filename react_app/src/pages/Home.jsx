@@ -30,6 +30,12 @@ function Home() {
     localStorage.setItem('hasSeenConnectPopup', 'true')
   }
 
+  // Get username from the URL path (/{username}/app/...)
+  const pathname = window.location.pathname
+  const appIndex = pathname.indexOf('/app')
+  const username = appIndex > 1 ? pathname.substring(1, appIndex) : null
+  const terminalPath = username ? `/${username}/terminal` : '/terminal'
+
   const apps = [
     {
       name: 'Graph',
@@ -96,9 +102,9 @@ function Home() {
       name: 'Terminal',
       description: 'Full terminal access to your cloud development environment.',
       icon: '🖥️',
-      path: '/terminal',
+      path: terminalPath,
       color: 'from-gray-700 to-gray-900',
-      available: false,
+      available: true,
       external: true,
     },
   ]
