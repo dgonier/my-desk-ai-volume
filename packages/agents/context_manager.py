@@ -226,7 +226,7 @@ class ContextManager:
     def graph(self):
         """Lazy load graph connection."""
         if self._graph is None:
-            from packages.cognitive.graph import get_graph
+            from ..cognitive.graph import get_graph
             self._graph = get_graph()
         return self._graph
 
@@ -234,7 +234,7 @@ class ContextManager:
     def embedder(self):
         """Lazy load embedder."""
         if self._embedder is None:
-            from packages.cognitive.embeddings import get_embedder
+            from ..cognitive.embeddings import get_embedder
             self._embedder = get_embedder()
         return self._embedder
 

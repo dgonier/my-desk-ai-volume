@@ -22,7 +22,7 @@ _registry = None
 def _get_graph():
     global _graph
     if _graph is None:
-        from packages.cognitive.graph import get_graph
+        from ..cognitive.graph import get_graph
         _graph = get_graph()
     return _graph
 
@@ -30,7 +30,7 @@ def _get_graph():
 def _get_registry():
     global _registry
     if _registry is None:
-        from packages.agents.tool_registry import get_registry
+        from .tool_registry import get_registry
         _registry = get_registry()
     return _registry
 
@@ -82,7 +82,7 @@ def get_cognitive_context(
                 result["projects"] = projects
 
         if context_type in ["full", "people"]:
-            from packages.cognitive.models import NodeType
+            from ..cognitive.models import NodeType
             people = graph.find_nodes(NodeType.PERSON, limit=limit)
             result["people"] = people
 
@@ -140,7 +140,7 @@ def update_cognitive_tree(
     try:
         if operation == "create":
             if node_type == "Project":
-                from packages.cognitive.models import ProjectCategory
+                from ..cognitive.models import ProjectCategory
                 category = data.get("category", "general")
                 if isinstance(category, str):
                     try:
@@ -238,7 +238,7 @@ def update_cognitive_tree(
                             }
 
             elif node_type == "Insight":
-                from packages.cognitive.models import InsightNode
+                from ..cognitive.models import InsightNode
                 insight = InsightNode.create(
                     insight=data.get("insight", data.get("content", "")),
                     source_type=data.get("source_type", "conversation"),
@@ -286,7 +286,7 @@ def update_cognitive_tree(
             if not from_id or not to_id:
                 return {"success": False, "error": "Both from_id and to_id required"}
 
-            from packages.cognitive.models import RelationType
+            from ..cognitive.models import RelationType
             rel_type_str = data.get("relationship", "RELATED_TO")
 
             # Try to match relationship type

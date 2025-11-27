@@ -26,13 +26,13 @@ from dataclasses import dataclass, field
 
 # Will be imported when running in Modal
 try:
-    from packages.cognitive.graph import get_graph, CognitiveGraph
-    from packages.cognitive.models import (
+    from ..cognitive.graph import get_graph, CognitiveGraph
+    from ..cognitive.models import (
         PersonaNode, TraitNode, MemoryNode, PreferenceNode,
         NodeType, RelationType, CycleNode, CycleType, CycleStatus
     )
-    from packages.agents.tool_registry import get_registry, ToolRegistry
-    from packages.agents.context_manager import get_context_manager, ContextManager
+    from .tool_registry import get_registry, ToolRegistry
+    from .context_manager import get_context_manager, ContextManager
 except ImportError as e:
     # For local development/testing - provide type stubs
     print(f"Import warning: {e}")
