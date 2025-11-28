@@ -180,7 +180,7 @@ def update_cognitive_tree(
                         email=data.get("email"),
                         phone=data.get("phone"),
                         relationship=data.get("relationship"),
-                        notes=data.get("notes"),
+                        notes=data.get("notes") or data.get("context"),
                         now=now
                     )
                     record = result.single()

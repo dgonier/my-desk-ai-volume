@@ -565,7 +565,7 @@ Supports:
                 "required": ["query"]
             },
             "tier": 2,
-            "handler_module": "packages.research.google_services",
+            "handler_module": "packages.private_services.gmail",
             "handler_function": "search_emails",
             "category": "research"
         },
