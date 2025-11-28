@@ -50,14 +50,11 @@ class ToolDef:
 
     def to_api_schema(self) -> dict:
         """Convert to Bedrock/Anthropic API tool schema."""
-        # Bedrock requires tools to have type: "custom" wrapper
+        # Standard Anthropic/Bedrock tool format
         return {
-            "type": "custom",
-            "custom": {
-                "name": self.name,
-                "description": self.description,
-                "input_schema": self.input_schema
-            }
+            "name": self.name,
+            "description": self.description,
+            "input_schema": self.input_schema
         }
 
     def to_dict(self) -> dict:
