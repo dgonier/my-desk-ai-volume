@@ -291,12 +291,25 @@ class ToolRegistry:
         if tool and tool.handler_module and tool.handler_function:
             try:
                 import importlib
+                import sys
+
+                # Ensure packages directory is in path for imports
+                packages_paths = [
+                    '/home/claude/my-desk-ai-volume/packages',
+                    '/packages'
+                ]
+                for pkg_path in packages_paths:
+                    if pkg_path not in sys.path:
+                        sys.path.insert(0, pkg_path)
+
                 module = importlib.import_module(tool.handler_module)
                 handler = getattr(module, tool.handler_function)
                 self._handlers[tool_name] = handler
                 return handler
             except Exception as e:
                 print(f"Failed to load handler for {tool_name}: {e}")
+                import traceback
+                traceback.print_exc()
 
         return None
 
@@ -387,7 +400,7 @@ Retrieves:
                 }
             },
             "tier": 1,
-            "handler_module": "packages.agents.core_handlers",
+            "handler_module": "agents.core_handlers",
             "handler_function": "get_cognitive_context",
             "category": "cognitive"
         },
@@ -430,7 +443,7 @@ Can create/update:
                 "required": ["operation", "node_type", "data"]
             },
             "tier": 1,
-            "handler_module": "packages.agents.core_handlers",
+            "handler_module": "agents.core_handlers",
             "handler_function": "update_cognitive_tree",
             "category": "cognitive"
         },
@@ -473,7 +486,7 @@ Builder Agent can:
                 "required": ["task", "task_type"]
             },
             "tier": 1,
-            "handler_module": "packages.agents.core_handlers",
+            "handler_module": "agents.core_handlers",
             "handler_function": "delegate_to_builder",
             "category": "delegation"
         },
@@ -489,7 +502,7 @@ Returns: Summary of added/updated/removed tools""",
                 "properties": {}
             },
             "tier": 1,
-            "handler_module": "packages.agents.core_handlers",
+            "handler_module": "agents.core_handlers",
             "handler_function": "refresh_tools",
             "category": "meta"
         },
@@ -515,7 +528,7 @@ Returns: List of tools with names, descriptions, and categories""",
                 }
             },
             "tier": 1,
-            "handler_module": "packages.agents.core_handlers",
+            "handler_module": "agents.core_handlers",
             "handler_function": "list_available_tools",
             "category": "meta"
         }
@@ -565,7 +578,7 @@ Supports:
                 "required": ["query"]
             },
             "tier": 2,
-            "handler_module": "packages.private_services.gmail",
+            "handler_module": "private_services.gmail",
             "handler_function": "search_emails",
             "category": "research"
         },
@@ -603,7 +616,7 @@ Supports:
                 }
             },
             "tier": 2,
-            "handler_module": "packages.research.google_services",
+            "handler_module": "research.google_services",
             "handler_function": "search_calendar",
             "category": "research"
         },
@@ -635,7 +648,7 @@ Searches across:
                 "required": ["query"]
             },
             "tier": 2,
-            "handler_module": "packages.research.google_services",
+            "handler_module": "research.google_services",
             "handler_function": "search_contacts",
             "category": "research"
         },
@@ -661,7 +674,7 @@ Returns: Search results with titles, URLs, snippets""",
                 "required": ["query"]
             },
             "tier": 2,
-            "handler_module": "packages.research.articles",
+            "handler_module": "research.articles",
             "handler_function": "web_search",
             "category": "research"
         }
