@@ -34,14 +34,30 @@ try:
     from .tool_registry import get_registry, ToolRegistry
     from .context_manager import get_context_manager, ContextManager
 except ImportError as e:
-    # For local development/testing - provide type stubs
-    print(f"Import warning: {e}")
-    CognitiveGraph = None
-    ToolRegistry = None
-    ContextManager = None
-    get_graph = None
-    get_registry = None
-    get_context_manager = None
+    # Relative imports failed - try absolute imports (for standalone execution)
+    try:
+        import sys
+        # Ensure packages directory is in path
+        for pkg_path in ['/home/claude/my-desk-ai-volume/packages', '/packages']:
+            if pkg_path not in sys.path:
+                sys.path.insert(0, pkg_path)
+
+        from cognitive.graph import get_graph, CognitiveGraph
+        from cognitive.models import (
+            PersonaNode, TraitNode, MemoryNode, PreferenceNode,
+            NodeType, RelationType, CycleNode, CycleType, CycleStatus
+        )
+        from agents.tool_registry import get_registry, ToolRegistry
+        from agents.context_manager import get_context_manager, ContextManager
+    except ImportError as e2:
+        # For type checking only - these must be set at runtime
+        print(f"Import warning: {e2}")
+        CognitiveGraph = None
+        ToolRegistry = None
+        ContextManager = None
+        get_graph = None
+        get_registry = None
+        get_context_manager = None
 
 
 @dataclass
