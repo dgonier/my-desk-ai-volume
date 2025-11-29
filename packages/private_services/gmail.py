@@ -112,8 +112,104 @@ class GmailService:
         if response.status_code == 200:
             data = response.json()
             return data.get('messages', [])
+        elif response.status_code == 403 and 'Metadata scope' in response.text and query:
+            # Gmail API rejects 'q' parameter when metadata scope is present
+            # Fall back to fetching more messages and filtering client-side
+            print(f"Gmail metadata scope restriction - falling back to client-side filtering")
+            return self._list_messages_with_client_filter(query, max_results, label_ids, include_spam_trash)
         else:
             raise Exception(f"Failed to list messages: {response.text}")
+
+    def _list_messages_with_client_filter(
+        self,
+        query: str,
+        max_results: int,
+        label_ids: List[str] = None,
+        include_spam_trash: bool = False
+    ) -> List[Dict[str, str]]:
+        """
+        Fallback when Gmail API rejects query parameter.
+        Fetches more messages and filters client-side.
+        """
+        import httpx
+
+        # Parse simple query terms
+        query_lower = query.lower()
+        from_filter = None
+        subject_filter = None
+
+        if 'from:' in query_lower:
+            # Extract from: value
+            import re
+            match = re.search(r'from:(\S+)', query_lower)
+            if match:
+                from_filter = match.group(1)
+
+        if 'subject:' in query_lower:
+            import re
+            match = re.search(r'subject:(\S+)', query_lower)
+            if match:
+                subject_filter = match.group(1)
+
+        # Fetch more messages to filter from
+        fetch_count = max_results * 5  # Fetch 5x to have enough after filtering
+        params = {
+            'maxResults': min(fetch_count, 100),
+            'includeSpamTrash': include_spam_trash,
+        }
+        if label_ids:
+            params['labelIds'] = label_ids
+
+        response = httpx.get(
+            f"{self.BASE_URL}/users/me/messages",
+            headers=self._get_headers(),
+            params=params
+        )
+
+        if response.status_code != 200:
+            raise Exception(f"Failed to list messages: {response.text}")
+
+        all_messages = response.json().get('messages', [])
+
+        if not from_filter and not subject_filter:
+            # No parseable filters, just return what we got
+            return all_messages[:max_results]
+
+        # Filter by fetching each message's metadata
+        filtered = []
+        for msg_info in all_messages:
+            if len(filtered) >= max_results:
+                break
+
+            try:
+                # Fetch just headers for filtering
+                msg_response = httpx.get(
+                    f"{self.BASE_URL}/users/me/messages/{msg_info['id']}",
+                    headers=self._get_headers(),
+                    params={'format': 'metadata', 'metadataHeaders': ['From', 'Subject']}
+                )
+
+                if msg_response.status_code != 200:
+                    continue
+
+                msg_data = msg_response.json()
+                headers = {
+                    h['name'].lower(): h['value'].lower()
+                    for h in msg_data.get('payload', {}).get('headers', [])
+                }
+
+                # Apply filters
+                if from_filter and from_filter not in headers.get('from', ''):
+                    continue
+                if subject_filter and subject_filter not in headers.get('subject', ''):
+                    continue
+
+                filtered.append(msg_info)
+
+            except Exception:
+                continue
+
+        return filtered
 
     def get_message(self, message_id: str, format: str = 'full') -> EmailMessage:
         """
@@ -134,11 +230,22 @@ class GmailService:
             params={'format': format}
         )
 
-        if response.status_code != 200:
-            raise Exception(f"Failed to get message: {response.text}")
+        if response.status_code == 200:
+            data = response.json()
+            return self._parse_message(data)
 
-        data = response.json()
-        return self._parse_message(data)
+        # Handle metadata scope restriction - fall back to metadata format
+        if response.status_code == 403 and 'Metadata scope' in response.text and format == 'full':
+            response = httpx.get(
+                f"{self.BASE_URL}/users/me/messages/{message_id}",
+                headers=self._get_headers(),
+                params={'format': 'metadata'}
+            )
+            if response.status_code == 200:
+                data = response.json()
+                return self._parse_message(data)
+
+        raise Exception(f"Failed to get message: {response.text}")
 
     def _parse_message(self, data: Dict[str, Any]) -> EmailMessage:
         """Parse Gmail API message response into EmailMessage."""

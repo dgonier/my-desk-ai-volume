@@ -98,25 +98,64 @@ class OAuthManager:
         self.user_email = user_email
         self.tokens = self._load_tokens()
 
-    def _get_token_path(self) -> str:
+    def _get_token_path(self, service: str = None) -> str:
         """Get the token storage path for the current user."""
         if self.user_email:
             # Per-user storage in oauth-tokens volume
+            if service:
+                return f"{TOKEN_STORAGE_BASE}/{self.user_email}/{service}.json"
             return f"{TOKEN_STORAGE_BASE}/{self.user_email}/tokens.json"
         else:
             # Legacy global storage for backward compatibility
             return "/home/claude/data/oauth_tokens.json"
 
     def _load_tokens(self) -> Dict[str, Any]:
-        """Load stored tokens from file."""
-        token_path = self._get_token_path()
-        if os.path.exists(token_path):
+        """Load stored tokens from file, supporting multiple formats."""
+        tokens = {}
+
+        if self.user_email:
+            # Check for per-service token files (google.json, github.json, etc.)
+            user_dir = f"{TOKEN_STORAGE_BASE}/{self.user_email}"
+            if os.path.isdir(user_dir):
+                for filename in os.listdir(user_dir):
+                    if filename.endswith('.json'):
+                        service_name = filename[:-5]  # Remove .json
+                        filepath = os.path.join(user_dir, filename)
+                        try:
+                            with open(filepath, 'r') as f:
+                                data = json.load(f)
+                                # Handle web app format: {"provider": "...", "tokens": {...}}
+                                if 'tokens' in data and isinstance(data['tokens'], dict):
+                                    token_data = data['tokens'].copy()
+                                    # Convert expires_at from epoch to ISO if needed
+                                    if 'expires_at' in token_data and isinstance(token_data['expires_at'], (int, float)):
+                                        token_data['expires_at'] = datetime.utcfromtimestamp(token_data['expires_at']).isoformat()
+                                    tokens[service_name] = token_data
+                                    # Google token works for gmail, calendar, contacts
+                                    if service_name == 'google':
+                                        tokens['gmail'] = token_data
+                                        tokens['calendar'] = token_data
+                                        tokens['contacts'] = token_data
+                                else:
+                                    # Direct format: {"access_token": ...}
+                                    tokens[service_name] = data
+                        except Exception as e:
+                            print(f"Error loading token from {filepath}: {e}")
+
+        # Also check legacy path
+        legacy_path = "/home/claude/data/oauth_tokens.json"
+        if os.path.exists(legacy_path):
             try:
-                with open(token_path, 'r') as f:
-                    return json.load(f)
+                with open(legacy_path, 'r') as f:
+                    legacy_tokens = json.load(f)
+                    # Merge, preferring per-user tokens
+                    for k, v in legacy_tokens.items():
+                        if k not in tokens:
+                            tokens[k] = v
             except Exception:
                 pass
-        return {}
+
+        return tokens
 
     def _save_tokens(self):
         """Save tokens to file."""
@@ -313,14 +352,31 @@ def get_oauth_manager(user_email: str = None) -> OAuthManager:
     Get OAuth manager instance for a user.
 
     Args:
-        user_email: User's email. If None, returns legacy global manager.
+        user_email: User's email. If None, tries to auto-discover from tokens directory.
     """
     global _oauth_managers
+
+    # Auto-discover user email if not provided
+    if user_email is None:
+        user_email = _discover_user_email()
 
     cache_key = user_email or "__global__"
     if cache_key not in _oauth_managers:
         _oauth_managers[cache_key] = OAuthManager(user_email)
     return _oauth_managers[cache_key]
+
+
+def _discover_user_email() -> Optional[str]:
+    """
+    Try to discover user email from tokens directory.
+    Returns the first user directory found, or None.
+    """
+    if os.path.isdir(TOKEN_STORAGE_BASE):
+        for entry in os.listdir(TOKEN_STORAGE_BASE):
+            entry_path = os.path.join(TOKEN_STORAGE_BASE, entry)
+            if os.path.isdir(entry_path) and '@' in entry:
+                return entry
+    return None
 
 
 def get_oauth_status(user_email: str = None) -> Dict[str, bool]:
