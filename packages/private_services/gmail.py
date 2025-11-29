@@ -3,14 +3,31 @@ Gmail Service - Read and Search Emails
 
 Uses Google Gmail API to access emails.
 Automatically extracts contacts and stores them in Neo4j.
+
+Gmail Categories (tab labels):
+- CATEGORY_PRIMARY: Important emails, personal conversations
+- CATEGORY_SOCIAL: Social network notifications (LinkedIn, Facebook, etc.)
+- CATEGORY_UPDATES: Transactional emails, order confirmations, receipts
+- CATEGORY_PROMOTIONS: Marketing emails, deals, offers
+- CATEGORY_FORUMS: Mailing lists, group discussions
 """
 
 import os
 import base64
 import email
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Literal
 from datetime import datetime
 from dataclasses import dataclass
+
+# Gmail category labels
+CATEGORY_PRIMARY = "CATEGORY_PRIMARY"
+CATEGORY_SOCIAL = "CATEGORY_SOCIAL"
+CATEGORY_UPDATES = "CATEGORY_UPDATES"
+CATEGORY_PROMOTIONS = "CATEGORY_PROMOTIONS"
+CATEGORY_FORUMS = "CATEGORY_FORUMS"
+
+# Convenience type for category selection
+EmailCategory = Literal["primary", "social", "updates", "promotions", "forums", "all"]
 
 
 @dataclass
@@ -28,6 +45,7 @@ class EmailMessage:
     body_html: Optional[str] = None
     labels: List[str] = None
     attachments: List[Dict[str, str]] = None
+    category: Optional[str] = None  # primary, social, updates, promotions, forums
 
 
 class GmailService:
@@ -112,104 +130,8 @@ class GmailService:
         if response.status_code == 200:
             data = response.json()
             return data.get('messages', [])
-        elif response.status_code == 403 and 'Metadata scope' in response.text and query:
-            # Gmail API rejects 'q' parameter when metadata scope is present
-            # Fall back to fetching more messages and filtering client-side
-            print(f"Gmail metadata scope restriction - falling back to client-side filtering")
-            return self._list_messages_with_client_filter(query, max_results, label_ids, include_spam_trash)
         else:
             raise Exception(f"Failed to list messages: {response.text}")
-
-    def _list_messages_with_client_filter(
-        self,
-        query: str,
-        max_results: int,
-        label_ids: List[str] = None,
-        include_spam_trash: bool = False
-    ) -> List[Dict[str, str]]:
-        """
-        Fallback when Gmail API rejects query parameter.
-        Fetches more messages and filters client-side.
-        """
-        import httpx
-
-        # Parse simple query terms
-        query_lower = query.lower()
-        from_filter = None
-        subject_filter = None
-
-        if 'from:' in query_lower:
-            # Extract from: value
-            import re
-            match = re.search(r'from:(\S+)', query_lower)
-            if match:
-                from_filter = match.group(1)
-
-        if 'subject:' in query_lower:
-            import re
-            match = re.search(r'subject:(\S+)', query_lower)
-            if match:
-                subject_filter = match.group(1)
-
-        # Fetch more messages to filter from
-        fetch_count = max_results * 5  # Fetch 5x to have enough after filtering
-        params = {
-            'maxResults': min(fetch_count, 100),
-            'includeSpamTrash': include_spam_trash,
-        }
-        if label_ids:
-            params['labelIds'] = label_ids
-
-        response = httpx.get(
-            f"{self.BASE_URL}/users/me/messages",
-            headers=self._get_headers(),
-            params=params
-        )
-
-        if response.status_code != 200:
-            raise Exception(f"Failed to list messages: {response.text}")
-
-        all_messages = response.json().get('messages', [])
-
-        if not from_filter and not subject_filter:
-            # No parseable filters, just return what we got
-            return all_messages[:max_results]
-
-        # Filter by fetching each message's metadata
-        filtered = []
-        for msg_info in all_messages:
-            if len(filtered) >= max_results:
-                break
-
-            try:
-                # Fetch just headers for filtering
-                msg_response = httpx.get(
-                    f"{self.BASE_URL}/users/me/messages/{msg_info['id']}",
-                    headers=self._get_headers(),
-                    params={'format': 'metadata', 'metadataHeaders': ['From', 'Subject']}
-                )
-
-                if msg_response.status_code != 200:
-                    continue
-
-                msg_data = msg_response.json()
-                headers = {
-                    h['name'].lower(): h['value'].lower()
-                    for h in msg_data.get('payload', {}).get('headers', [])
-                }
-
-                # Apply filters
-                if from_filter and from_filter not in headers.get('from', ''):
-                    continue
-                if subject_filter and subject_filter not in headers.get('subject', ''):
-                    continue
-
-                filtered.append(msg_info)
-
-            except Exception:
-                continue
-
-        return filtered
 
     def get_message(self, message_id: str, format: str = 'full') -> EmailMessage:
         """
@@ -230,22 +152,11 @@ class GmailService:
             params={'format': format}
         )
 
-        if response.status_code == 200:
-            data = response.json()
-            return self._parse_message(data)
+        if response.status_code != 200:
+            raise Exception(f"Failed to get message: {response.text}")
 
-        # Handle metadata scope restriction - fall back to metadata format
-        if response.status_code == 403 and 'Metadata scope' in response.text and format == 'full':
-            response = httpx.get(
-                f"{self.BASE_URL}/users/me/messages/{message_id}",
-                headers=self._get_headers(),
-                params={'format': 'metadata'}
-            )
-            if response.status_code == 200:
-                data = response.json()
-                return self._parse_message(data)
-
-        raise Exception(f"Failed to get message: {response.text}")
+        data = response.json()
+        return self._parse_message(data)
 
     def _parse_message(self, data: Dict[str, Any]) -> EmailMessage:
         """Parse Gmail API message response into EmailMessage."""
@@ -299,6 +210,21 @@ class GmailService:
                 elif mime_type == 'text/html' and part.get('body', {}).get('data'):
                     body_html = base64.urlsafe_b64decode(part['body']['data']).decode('utf-8', errors='ignore')
 
+        # Extract category from labels
+        labels = data.get('labelIds', [])
+        category = None
+        for label in labels:
+            if label == CATEGORY_PRIMARY:
+                category = "primary"
+            elif label == CATEGORY_SOCIAL:
+                category = "social"
+            elif label == CATEGORY_UPDATES:
+                category = "updates"
+            elif label == CATEGORY_PROMOTIONS:
+                category = "promotions"
+            elif label == CATEGORY_FORUMS:
+                category = "forums"
+
         return EmailMessage(
             id=data['id'],
             thread_id=data['threadId'],
@@ -310,21 +236,51 @@ class GmailService:
             snippet=data.get('snippet', ''),
             body_text=body_text,
             body_html=body_html,
-            labels=data.get('labelIds', []),
+            labels=labels,
+            category=category,
         )
 
-    def search(self, query: str, max_results: int = 20) -> List[EmailMessage]:
+    def _get_category_label(self, category: EmailCategory) -> Optional[str]:
+        """Convert category name to Gmail label ID."""
+        category_map = {
+            "primary": CATEGORY_PRIMARY,
+            "social": CATEGORY_SOCIAL,
+            "updates": CATEGORY_UPDATES,
+            "promotions": CATEGORY_PROMOTIONS,
+            "forums": CATEGORY_FORUMS,
+        }
+        return category_map.get(category)
+
+    def search(
+        self,
+        query: str = "",
+        max_results: int = 20,
+        category: EmailCategory = "primary"
+    ) -> List[EmailMessage]:
         """
         Search emails and return full messages.
 
         Args:
             query: Gmail search query (same syntax as Gmail web)
             max_results: Max messages to return
+            category: Filter by Gmail category (primary, social, updates, promotions, forums, all)
+                      Default is "primary" to focus on important emails.
 
         Returns:
             List of EmailMessage objects
         """
-        message_ids = self.list_messages(query=query, max_results=max_results)
+        # Build label filter
+        label_ids = ["INBOX"]  # Always filter to inbox
+        if category != "all":
+            category_label = self._get_category_label(category)
+            if category_label:
+                label_ids.append(category_label)
+
+        message_ids = self.list_messages(
+            query=query if query else None,
+            max_results=max_results,
+            label_ids=label_ids
+        )
         messages = []
 
         for msg_info in message_ids:
@@ -336,18 +292,61 @@ class GmailService:
 
         return messages
 
-    def get_recent_unread(self, max_results: int = 10) -> List[EmailMessage]:
-        """Get recent unread messages."""
-        return self.search("is:unread", max_results=max_results)
+    def get_recent_unread(
+        self,
+        max_results: int = 10,
+        category: EmailCategory = "primary"
+    ) -> List[EmailMessage]:
+        """Get recent unread messages from specified category."""
+        return self.search("is:unread", max_results=max_results, category=category)
 
-    def get_from_sender(self, email_address: str, max_results: int = 20) -> List[EmailMessage]:
-        """Get messages from a specific sender."""
-        return self.search(f"from:{email_address}", max_results=max_results)
+    def get_from_sender(
+        self,
+        email_address: str,
+        max_results: int = 20,
+        category: EmailCategory = "all"
+    ) -> List[EmailMessage]:
+        """Get messages from a specific sender (searches all categories by default)."""
+        return self.search(f"from:{email_address}", max_results=max_results, category=category)
+
+    def get_updates_from(
+        self,
+        sender_patterns: List[str],
+        max_results: int = 20
+    ) -> List[EmailMessage]:
+        """
+        Get update emails from specific senders.
+
+        Useful for tracking specific services (e.g., shipping updates, bank alerts).
+
+        Args:
+            sender_patterns: List of email patterns to match (e.g., ["amazon.com", "ups.com"])
+            max_results: Max messages per sender
+
+        Returns:
+            List of EmailMessage objects from Updates category matching patterns
+        """
+        all_messages = []
+        for pattern in sender_patterns:
+            messages = self.search(
+                f"from:{pattern}",
+                max_results=max_results,
+                category="updates"
+            )
+            all_messages.extend(messages)
+
+        # Sort by date descending
+        all_messages.sort(key=lambda m: m.date, reverse=True)
+        return all_messages[:max_results]
 
 
 # Convenience functions
 
-def read_recent_emails(max_results: int = 10, unread_only: bool = False) -> List[Dict[str, Any]]:
+def read_recent_emails(
+    max_results: int = 10,
+    unread_only: bool = False,
+    category: EmailCategory = "primary"
+) -> List[Dict[str, Any]]:
     """
     Read recent emails and return as dictionaries.
 
@@ -356,6 +355,8 @@ def read_recent_emails(max_results: int = 10, unread_only: bool = False) -> List
     Args:
         max_results: Number of emails to fetch
         unread_only: Only get unread emails
+        category: Gmail category to filter by (primary, social, updates, promotions, forums, all)
+                  Default is "primary" to focus on important personal emails.
 
     Returns:
         List of email data dicts
@@ -367,9 +368,9 @@ def read_recent_emails(max_results: int = 10, unread_only: bool = False) -> List
 
     try:
         if unread_only:
-            messages = gmail.get_recent_unread(max_results)
+            messages = gmail.get_recent_unread(max_results, category=category)
         else:
-            messages = gmail.search("", max_results)
+            messages = gmail.search("", max_results, category=category)
 
         # Process contacts from emails
         from .contacts import ContactManager
@@ -392,6 +393,7 @@ def read_recent_emails(max_results: int = 10, unread_only: bool = False) -> List
                 "date": msg.date.isoformat(),
                 "snippet": msg.snippet,
                 "labels": msg.labels,
+                "category": msg.category,
             })
 
         return results
@@ -400,13 +402,19 @@ def read_recent_emails(max_results: int = 10, unread_only: bool = False) -> List
         return [{"error": str(e)}]
 
 
-def search_emails(query: str, max_results: int = 20) -> List[Dict[str, Any]]:
+def search_emails(
+    query: str,
+    max_results: int = 20,
+    category: EmailCategory = "primary"
+) -> List[Dict[str, Any]]:
     """
     Search emails with Gmail query syntax.
 
     Args:
         query: Gmail search query (e.g., "from:john subject:meeting")
         max_results: Max number of results
+        category: Gmail category to filter by (primary, social, updates, promotions, forums, all)
+                  Default is "primary" to focus on important personal emails.
 
     Returns:
         List of email data dicts
@@ -417,7 +425,7 @@ def search_emails(query: str, max_results: int = 20) -> List[Dict[str, Any]]:
         return [{"error": "Not authenticated with Gmail. Please complete OAuth flow."}]
 
     try:
-        messages = gmail.search(query, max_results)
+        messages = gmail.search(query, max_results, category=category)
 
         # Process contacts
         from .contacts import ContactManager
@@ -440,6 +448,62 @@ def search_emails(query: str, max_results: int = 20) -> List[Dict[str, Any]]:
                 "snippet": msg.snippet,
                 "body_preview": msg.body_text[:500] if msg.body_text else None,
                 "labels": msg.labels,
+                "category": msg.category,
+            })
+
+        return results
+
+    except Exception as e:
+        return [{"error": str(e)}]
+
+
+def get_updates_from_services(
+    services: List[str] = None,
+    max_results: int = 20
+) -> List[Dict[str, Any]]:
+    """
+    Get update emails from specific services.
+
+    Useful for tracking shipping, bank alerts, receipts, etc.
+
+    Args:
+        services: List of email domains/patterns (default: common services)
+        max_results: Max total results
+
+    Returns:
+        List of email data dicts from Updates category
+    """
+    if services is None:
+        # Default to common transactional email services
+        services = [
+            "amazon.com",
+            "ups.com",
+            "fedex.com",
+            "usps.com",
+            "paypal.com",
+            "venmo.com",
+            "chase.com",
+            "bankofamerica.com",
+        ]
+
+    gmail = GmailService()
+
+    if not gmail.is_authenticated():
+        return [{"error": "Not authenticated with Gmail. Please complete OAuth flow."}]
+
+    try:
+        messages = gmail.get_updates_from(services, max_results)
+
+        results = []
+        for msg in messages:
+            results.append({
+                "id": msg.id,
+                "subject": msg.subject,
+                "from": msg.sender,
+                "from_email": msg.sender_email,
+                "date": msg.date.isoformat(),
+                "snippet": msg.snippet,
+                "category": msg.category,
             })
 
         return results
